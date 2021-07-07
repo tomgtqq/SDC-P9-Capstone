@@ -104,7 +104,7 @@ class WaypointUpdater(object):
             stop_idx = max(self.stopline_wp_idx -
                            closest_idx - 4, 0)
             dist = self.distance(waypoints, i, stop_idx)
-
+            
             # add bias for smooth braking
             vel = math.sqrt(2 * MAX_DECEL * dist) + (i / LOOKAHEAD_WPS)
 
