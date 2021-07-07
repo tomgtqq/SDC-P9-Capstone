@@ -26,8 +26,6 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 
 LOOKAHEAD_WPS = 50  # Number of waypoints we will publish. You can change this number
 MAX_DECEL = 0.5
-CONSTANT_DECEL = 1 / LOOKAHEAD_WPS  # Smoother braking
-STOP_LINE_MARGIN = 4
 
 
 class WaypointUpdater(object):
@@ -69,13 +67,11 @@ class WaypointUpdater(object):
         cl_vect = np.array(closest_coord)
         prev_vect = np.array(prev_coord)
         pos_vect = np.array([x, y])
+        val = np.dot(cl_vect-prev_vect, pos_vect-cl_vect)
 
-        val = np.dot(cl_vect - prev_vect, pos_vect - cl_vect)
-
-        # the way point is behind car
         if val > 0:
             closest_idx = (closest_idx + 1) % len(self.waypoints_2d)
-
+            rospy.logwarn("closest_idx={}".format(closest_idx))
         return closest_idx
 
     def publish_waypoints(self):
@@ -106,9 +102,11 @@ class WaypointUpdater(object):
 
             # Two waypoints back from line so front of car stops at line
             stop_idx = max(self.stopline_wp_idx -
-                           closest_idx - STOP_LINE_MARGIN, 0)
+                           closest_idx - 4, 0)
             dist = self.distance(waypoints, i, stop_idx)
-            vel = math.sqrt(2 * MAX_DECEL * dist) + (i * CONSTANT_DECEL)
+
+            # add bias for smooth braking
+            vel = math.sqrt(2 * MAX_DECEL * dist) + (i / LOOKAHEAD_WPS)
 
             # the velocity is small enough
             if vel < 1.0:
@@ -125,7 +123,7 @@ class WaypointUpdater(object):
         self.pose = msg
 
     def waypoints_cb(self, waypoints):
-        self.base_waypointss = waypoints
+        self.base_lane = waypoints
         if not self.waypoints_2d:
             self.waypoints_2d = [[waypoint.pose.pose.position.x,
                                   waypoint.pose.pose.position.y] for waypoint in waypoints.waypoints]
@@ -133,6 +131,8 @@ class WaypointUpdater(object):
 
     def traffic_cb(self, msg):
         if self.stopline_wp_idx != msg.data:
+            rospy.logwarn("LIGHT: new stopline idx={} , old stopline idx={} ".format(
+                msg.data, self.stopline_wp_idx))
             self.stopline_wp_idx = msg.data
 
     def obstacle_cb(self, msg):
